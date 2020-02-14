@@ -4,7 +4,8 @@ import { randomBytes } from 'crypto';
 import { createHash } from 'crypto';
 import { promisify } from 'util';
 import { SystemInfo, Document, JSONDocument, PackageBenchmarkSummary, QueryResult } from './types';
-import { PackageId } from 'types-publisher/bin/lib/packages';
+import { PackageId, formatDependencyVersion, TypingVersion } from 'types-publisher/bin/lib/packages';
+import { parseVersionFromDirectoryName } from 'types-publisher/bin/lib/definition-parser';
 import { execAndThrowErrors } from 'types-publisher/bin/util/util';
 import { gitChanges } from 'types-publisher/bin/tester/test-runner';
 import { execSync } from 'child_process';
@@ -127,7 +128,7 @@ export function packageIdsAreEqual(a: PackageId, b: PackageId): boolean;
 export function packageIdsAreEqual(a: PackageId, b?: PackageId): boolean | ((b: PackageId) => boolean) {
   return typeof b === 'undefined' ? equalsA : equalsA(b);
   function equalsA(b: PackageId) {
-    return a.name === b.name && a.majorVersion === b.majorVersion;
+    return a.name === b.name && formatDependencyVersion(a.version) === formatDependencyVersion(b.version);
   }
 }
 
@@ -164,18 +165,19 @@ export function createDocument<T>(body: T, version: number): Document<T> {
 }
 
 export function parsePackageKey(key: string): PackageId {
-  const [name, version] = key.split('/');
+  const [name, versionString] = key.split('/');
+  const version = parseVersionFromDirectoryName(versionString)
   return {
     name,
-    majorVersion: parseInt(version.replace(/^v/, '')) || '*' as const,
+    version: version || '*' as const,
   };
 }
 
-export function toPackageKey(name: string, majorVersion: string): string;
+export function toPackageKey(name: string, version: TypingVersion): string;
 export function toPackageKey(packageId: PackageId): string;
-export function toPackageKey(packageIdOrName: string | PackageId, majorVersion?: string) {
-  const { name, majorVersion: version } = typeof packageIdOrName === 'string' ? { name: packageIdOrName, majorVersion } : packageIdOrName;
-  return `${name}/v${version}`;
+export function toPackageKey(packageIdOrName: string | PackageId, version?: TypingVersion) {
+  const packageId = typeof packageIdOrName === 'string' ? { name: packageIdOrName, version: version || '*' as const } : packageIdOrName;
+  return `${packageId.name}/${formatDependencyVersion(packageId.version)}`
 }
 
 export function deserializeSummary(doc: QueryResult<JSONDocument<PackageBenchmarkSummary>>): QueryResult<Document<PackageBenchmarkSummary>>;
